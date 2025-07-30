@@ -5,9 +5,8 @@ import (
 	"strings"
 )
 
-func CleanChirp(chirp string) string {
+func CleanChirp(chirp string, toReplace []string) string {
 	const stars = "****"
-	toReplace := []string{"kerfuffle", "sharbert", "fornax"}
 	for _, word := range toReplace {
 		lowerChirp := strings.ToLower(chirp)
 		replaceIdxs := findIndices(lowerChirp, word)

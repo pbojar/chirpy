@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 
 	"github.com/pbojar/chirpy/internal/utils"
@@ -18,8 +17,7 @@ func handlerValidateChirp(w http.ResponseWriter, req *http.Request) {
 	type chirp struct {
 		Body string `json:"body"`
 	}
-	type validateResponse struct {
-		Error       string `json:"error"`
+	type validResponse struct {
 		CleanedBody string `json:"cleaned_body"`
 	}
 
@@ -27,27 +25,20 @@ func handlerValidateChirp(w http.ResponseWriter, req *http.Request) {
 	chrp := chirp{}
 	err := decoder.Decode(&chrp)
 	if err != nil {
-		log.Printf("Error decoding chirp: %s", err)
-		w.WriteHeader(500)
+		respondWithError(w, http.StatusInternalServerError, "Couldn't decode chirp", err)
 		return
 	}
 
-	resp := validateResponse{}
-	if len(chrp.Body) > 140 {
-		w.WriteHeader(400)
-		resp.Error = "Chirp is too long"
-	} else {
-		w.WriteHeader(200)
-		resp.CleanedBody = utils.CleanChirp(chrp.Body)
-	}
-
-	dat, err := json.Marshal(resp)
-	if err != nil {
-		log.Printf("Error marshalling JSON: %s", err)
-		w.WriteHeader(500)
+	const maxChirpLength = 140
+	if len(chrp.Body) > maxChirpLength {
+		respondWithError(w, http.StatusBadRequest, "Chirp is too long", nil)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(dat)
+	profanity := []string{"kerfuffle", "sharbert", "fornax"}
+	cleaned := utils.CleanChirp(chrp.Body, profanity)
+
+	respondWithJSON(w, http.StatusOK, validResponse{
+		CleanedBody: cleaned,
+	})
 }
