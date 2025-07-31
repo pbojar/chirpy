@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/pbojar/chirpy/internal/database"
 	"github.com/pbojar/chirpy/internal/utils"
 )
 
@@ -16,40 +17,18 @@ type User struct {
 	Email     string    `json:"email"`
 }
 
+type Chirp struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Body      string    `json:"body"`
+	UserID    uuid.UUID `json:"user_id"`
+}
+
 func handlerReadiness(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(200)
 	w.Write([]byte("OK"))
-}
-
-func handlerValidateChirp(w http.ResponseWriter, req *http.Request) {
-	type chirp struct {
-		Body string `json:"body"`
-	}
-	type validResponse struct {
-		CleanedBody string `json:"cleaned_body"`
-	}
-
-	decoder := json.NewDecoder(req.Body)
-	chrp := chirp{}
-	err := decoder.Decode(&chrp)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't decode chirp", err)
-		return
-	}
-
-	const maxChirpLength = 140
-	if len(chrp.Body) > maxChirpLength {
-		respondWithError(w, http.StatusBadRequest, "Chirp is too long", nil)
-		return
-	}
-
-	profanity := []string{"kerfuffle", "sharbert", "fornax"}
-	cleaned := utils.CleanChirp(chrp.Body, profanity)
-
-	respondWithJSON(w, http.StatusOK, validResponse{
-		CleanedBody: cleaned,
-	})
 }
 
 func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, req *http.Request) {
@@ -72,4 +51,36 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, req *http.Request
 		return
 	}
 	respondWithJSON(w, http.StatusCreated, user)
+}
+
+func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, req *http.Request) {
+	type createChirpParams struct {
+		Body   string    `json:"body"`
+		UserID uuid.UUID `json:"user_id"`
+	}
+
+	decoder := json.NewDecoder(req.Body)
+	params := createChirpParams{}
+	err := decoder.Decode(&params)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't decode chirp", err)
+		return
+	}
+
+	const maxChirpLength = 140
+	if len(params.Body) > maxChirpLength {
+		respondWithError(w, http.StatusBadRequest, "Chirp is too long", nil)
+		return
+	}
+
+	profanity := []string{"kerfuffle", "sharbert", "fornax"}
+	params.Body = utils.CleanChirp(params.Body, profanity)
+
+	dbChirp, err := cfg.dbQueries.CreateChirp(req.Context(), database.CreateChirpParams(params))
+	chirp := Chirp(dbChirp)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Couldn't create chirp", err)
+		return
+	}
+	respondWithJSON(w, http.StatusCreated, chirp)
 }
