@@ -84,3 +84,30 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, req *http.Reques
 	}
 	respondWithJSON(w, http.StatusCreated, chirp)
 }
+
+func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, req *http.Request) {
+	dbChirps, err := cfg.dbQueries.GetChirpsAsc(req.Context())
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Couldn't get chirps", err)
+		return
+	}
+	chirps := make([]Chirp, 0, len(dbChirps))
+	for _, dbChirp := range dbChirps {
+		chirps = append(chirps, Chirp(dbChirp))
+	}
+	respondWithJSON(w, http.StatusOK, chirps)
+}
+
+func (cfg *apiConfig) handlerGetChirp(w http.ResponseWriter, req *http.Request) {
+	chirpID, err := uuid.Parse(req.PathValue("chirpID"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Couldn't parse chirpID", err)
+		return
+	}
+	dbChirp, err := cfg.dbQueries.GetChirpByID(req.Context(), chirpID)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "Couldn't get chirp", err)
+		return
+	}
+	respondWithJSON(w, http.StatusOK, Chirp(dbChirp))
+}
