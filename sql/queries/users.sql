@@ -17,3 +17,9 @@ SELECT * FROM users WHERE email = $1;
 
 -- name: DeleteUsers :exec
 DELETE FROM users;
+
+-- name: UpdateUserEmail :exec
+UPDATE users SET email = $1, updated_at = NOW() WHERE id = $2;
+
+-- name: UpdateUserPassword :exec
+UPDATE users SET hashed_password = $1, updated_at = NOW() WHERE id = $2;

@@ -71,6 +71,73 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, req *http.Request
 	respondWithJSON(w, http.StatusCreated, user)
 }
 
+func (cfg *apiConfig) handlerUpdateUserCredentials(w http.ResponseWriter, req *http.Request) {
+	type updateUserReq struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	decoder := json.NewDecoder(req.Body)
+	params := updateUserReq{}
+	err := decoder.Decode(&params)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't decode create user request", err)
+		return
+	}
+
+	token, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Missing auth token", err)
+		return
+	}
+
+	userID, err := auth.ValidateJWT(token, cfg.secret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Couldn't validate JWT", err)
+		return
+	}
+
+	if params.Password != "" {
+		hashedPassword, err := auth.HashPassword(params.Password)
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Couldn't hash password", err)
+			return
+		}
+		err = cfg.dbQueries.UpdateUserPassword(req.Context(), database.UpdateUserPasswordParams{
+			HashedPassword: hashedPassword,
+			ID:             userID,
+		})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Couldn't update password", err)
+			return
+		}
+	}
+
+	if params.Email != "" {
+		err = cfg.dbQueries.UpdateUserEmail(req.Context(), database.UpdateUserEmailParams{
+			Email: params.Email,
+			ID:    userID,
+		})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Couldn't update email", err)
+			return
+		}
+	}
+
+	dbUser, err := cfg.dbQueries.GetUserByID(req.Context(), userID)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't get user", err)
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, User{
+		ID:        dbUser.ID,
+		CreatedAt: dbUser.CreatedAt,
+		UpdatedAt: dbUser.UpdatedAt,
+		Email:     dbUser.Email,
+	})
+}
+
 func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, req *http.Request) {
 	type loginReq struct {
 		Email    string `json:"email"`
@@ -149,12 +216,12 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, req *http.Reques
 
 	token, err := auth.GetBearerToken(req.Header)
 	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "missing auth token", err)
+		respondWithError(w, http.StatusUnauthorized, "Missing auth token", err)
 		return
 	}
 	userID, err := auth.ValidateJWT(token, cfg.secret)
 	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "invalid auth token", err)
+		respondWithError(w, http.StatusUnauthorized, "Invalid auth token", err)
 		return
 	}
 	params.UserID = userID
@@ -198,7 +265,7 @@ func (cfg *apiConfig) handlerGetChirp(w http.ResponseWriter, req *http.Request) 
 func (cfg *apiConfig) handlerRefresh(w http.ResponseWriter, req *http.Request) {
 	refreshToken, err := auth.GetBearerToken(req.Header)
 	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "missing auth token", err)
+		respondWithError(w, http.StatusUnauthorized, "Missing auth token", err)
 		return
 	}
 
@@ -221,7 +288,7 @@ func (cfg *apiConfig) handlerRefresh(w http.ResponseWriter, req *http.Request) {
 func (cfg *apiConfig) handlerRevoke(w http.ResponseWriter, req *http.Request) {
 	refreshToken, err := auth.GetBearerToken(req.Header)
 	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "missing auth token", err)
+		respondWithError(w, http.StatusUnauthorized, "Missing auth token", err)
 		return
 	}
 
