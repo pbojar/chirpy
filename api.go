@@ -240,11 +240,29 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, req *http.Reques
 }
 
 func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, req *http.Request) {
-	dbChirps, err := cfg.dbQueries.GetChirpsAsc(req.Context())
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Couldn't get chirps", err)
-		return
+	authIDString := req.URL.Query().Get("author_id")
+
+	var dbChirps []database.Chirp
+	var err error
+	if authIDString == "" {
+		dbChirps, err = cfg.dbQueries.GetChirpsAsc(req.Context())
+		if err != nil {
+			respondWithError(w, http.StatusBadRequest, "Couldn't get chirps", err)
+			return
+		}
+	} else {
+		authID, err := uuid.Parse(authIDString)
+		if err != nil {
+			respondWithError(w, http.StatusBadRequest, "Couldn't parse chirpID", err)
+			return
+		}
+		dbChirps, err = cfg.dbQueries.GetChirpsByUserIDAsc(req.Context(), authID)
+		if err != nil {
+			respondWithError(w, http.StatusBadRequest, "Couldn't get chirps", err)
+			return
+		}
 	}
+
 	chirps := make([]Chirp, 0, len(dbChirps))
 	for _, dbChirp := range dbChirps {
 		chirps = append(chirps, Chirp(dbChirp))
